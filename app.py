@@ -4,6 +4,7 @@ import firebase_admin
 from firebase_admin import credentials, db
 from flask import Flask, jsonify, request
 import time
+import threading
 
 app = Flask(__name__)
 
@@ -216,24 +217,103 @@ def defuzzify(results):
     else:
         return numerator / denominator
 
-# Route untuk mendapatkan hasil defuzzifikasi berdasarkan data sensor
-@app.route('/calculate_fuzzy', methods=['POST'])
-def calculate_fuzzy():
-    data = request.json
-    
-    suhu = data.get("Suhu_Terkalibrasi", 0)
-    kelembaban_udara = data.get("Kelembaban_Udara_Terkalibrasi", 0)
-    kelembaban_tanah = data.get("Kelembaban_Tanah_Terkalibrasi", 0)
-    
-    results = evaluate_rules(suhu, kelembaban_udara, kelembaban_tanah)
-    output_durasi = defuzzify(results)
-    
-    return jsonify({
-        'durasi': round(output_durasi, 2),
-        'timestamp': int(time.time())
-    })
 
-# Route untuk membaca data sensor dari Firebase dan menghitung fuzzy logic
+# Variabel untuk melacak status pompa
+pump_running = False
+last_processed_time = 0
+
+# Fungsi untuk memproses data sensor secara otomatis
+def process_sensor_data_automatic():
+    global pump_running, last_processed_time
+    
+    try:
+        # Mengambil data terbaru dari Firebase
+        sensor_ref = db.reference('MonitoringData')
+        pump_ref = db.reference('pump_control')
+        
+        # Stream listener untuk mendeteksi perubahan data sensor
+        def sensor_listener(event):
+            global pump_running, last_processed_time
+            current_time = int(time.time())
+            
+            # Hindari pemrosesan berulang dalam waktu singkat (minimal 10 detik interval)
+            if current_time - last_processed_time < 10:
+                return
+                
+            last_processed_time = current_time
+            
+            if pump_running:
+                print("Pompa sedang berjalan, menunggu selesai...")
+                return
+                
+            print("Mendeteksi perubahan data sensor, memproses...")
+            
+            # Ambil data sensor terbaru
+            sensor_data = sensor_ref.get()
+            if not sensor_data:
+                print("Tidak ada data sensor di Firebase")
+                return
+                
+            # Menghitung hasil fuzzy
+            suhu = sensor_data.get("Suhu_Terkalibrasi", 0)
+            kelembaban_udara = sensor_data.get("Kelembaban_Udara_Terkalibrasi", 0)
+            kelembaban_tanah = sensor_data.get("Kelembaban_Tanah_Terkalibrasi", 0)
+            
+            results = evaluate_rules(suhu, kelembaban_udara, kelembaban_tanah)
+            output_durasi = defuzzify(results)
+            
+            # Menyimpan hasil ke Firebase untuk diambil oleh ESP8266
+            result_data = {
+                'durasi': round(output_durasi, 2),
+                'timestamp': current_time,
+                'processed': True
+            }
+            pump_ref.set(result_data)
+            
+            if output_durasi > 0:
+                pump_running = True
+                print(f"Pompa akan berjalan selama {output_durasi} detik")
+                
+                # Set timer untuk menandai selesainya penyiraman
+                def pump_finished():
+                    global pump_running
+                    pump_running = False
+                    print("Pompa selesai, siap untuk pemrosesan data sensor berikutnya")
+                
+                # Timer untuk mendeteksi kapan pompa selesai
+                timer = threading.Timer(output_durasi + 5, pump_finished)
+                timer.daemon = True
+                timer.start()
+        
+        # Fungsi untuk mendeteksi status pompa
+        def pump_status_listener(event):
+            global pump_running
+            
+            if event.data and 'status' in event.data:
+                if event.data['status'] == 'finished':
+                    pump_running = False
+                    print("Status pompa: selesai (berdasarkan feedback ESP8266)")
+                elif event.data['status'] == 'running':
+                    pump_running = True
+                    print("Status pompa: berjalan (berdasarkan feedback ESP8266)")
+        
+        # Daftarkan listener untuk data sensor dan status pompa
+        sensor_ref.listen(sensor_listener)
+        db.reference('pump_status').listen(pump_status_listener)
+        
+        print("Background monitor started - menunggu perubahan data sensor...")
+        
+    except Exception as e:
+        print(f"Error in background process: {str(e)}")
+        time.sleep(10)  # Tunggu 10 detik sebelum mencoba lagi
+        process_sensor_data_automatic()
+
+# Jalankan proses background di thread terpisah
+background_thread = threading.Thread(target=process_sensor_data_automatic)
+background_thread.daemon = True
+background_thread.start()
+
+# Route tetap ada untuk backward compatibility
 @app.route('/process_sensor_data', methods=['GET'])
 def process_sensor_data():
     try:
@@ -274,11 +354,11 @@ def process_sensor_data():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Route untuk polling data baru
 @app.route('/status', methods=['GET'])
 def status():
     return jsonify({
         'status': 'online',
+        'running_in_background': True,
         'timestamp': int(time.time())
     })
 
