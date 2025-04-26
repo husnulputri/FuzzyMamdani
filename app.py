@@ -1,4 +1,25 @@
+import os
 import numpy as np
+import firebase_admin
+from firebase_admin import credentials, db
+from flask import Flask, jsonify, request
+import time
+
+app = Flask(__name__)
+
+# Initialize Firebase
+# Di Railway, Anda perlu set FIREBASE_CREDENTIALS sebagai environment variable
+# yang berisi konten JSON dari service account key
+if 'FIREBASE_CREDENTIALS' in os.environ:
+    cred_dict = eval(os.environ.get('FIREBASE_CREDENTIALS'))
+    cred = credentials.Certificate(cred_dict)
+else:
+    # Untuk pengembangan lokal, gunakan file json
+    cred = credentials.Certificate('path/to/serviceAccountKey.json')
+
+firebase_admin.initialize_app(cred, {
+    'databaseURL': os.environ.get('FIREBASE_DATABASE_URL', 'https://project-penyiraman-pencahayaan-default-rtdb.asia-southeast1.firebasedatabase.app/')
+})
 
 # Fungsi Membership untuk Suhu
 def suhu_dingin(a):
@@ -143,8 +164,7 @@ rules = [
     ('Normal', 'Basah', 'Basah', 'Mati'), 
     ('Sejuk', 'Basah', 'Basah', 'Mati'), 
     ('Dingin', 'Basah', 'Basah', 'Mati'), 
-
-
+    
 ]
 
 # Fungsi Evaluasi Rule
@@ -196,18 +216,73 @@ def defuzzify(results):
     else:
         return numerator / denominator
 
-# Contoh penggunaan:
-data = {
-    "Suhu_Terkalibrasi": 28.6,
-    "Kelembaban_Udara_Terkalibrasi": 78.7,
-    "Kelembaban_Tanah_Terkalibrasi": 100
-}
+# Route untuk mendapatkan hasil defuzzifikasi berdasarkan data sensor
+@app.route('/calculate_fuzzy', methods=['POST'])
+def calculate_fuzzy():
+    data = request.json
+    
+    suhu = data.get("Suhu_Terkalibrasi", 0)
+    kelembaban_udara = data.get("Kelembaban_Udara_Terkalibrasi", 0)
+    kelembaban_tanah = data.get("Kelembaban_Tanah_Terkalibrasi", 0)
+    
+    results = evaluate_rules(suhu, kelembaban_udara, kelembaban_tanah)
+    output_durasi = defuzzify(results)
+    
+    return jsonify({
+        'durasi': round(output_durasi, 2),
+        'timestamp': int(time.time())
+    })
 
-suhu = data["Suhu_Terkalibrasi"]
-kelembaban_udara = data["Kelembaban_Udara_Terkalibrasi"]
-kelembaban_tanah = data["Kelembaban_Tanah_Terkalibrasi"]
+# Route untuk membaca data sensor dari Firebase dan menghitung fuzzy logic
+@app.route('/process_sensor_data', methods=['GET'])
+def process_sensor_data():
+    try:
+        # Mengambil data terbaru dari Firebase
+        sensor_ref = db.reference('sensors/latest')
+        sensor_data = sensor_ref.get()
+        
+        if not sensor_data:
+            return jsonify({'error': 'No sensor data found in Firebase'}), 404
+        
+        # Menghitung hasil fuzzy
+        suhu = sensor_data.get("Suhu_Terkalibrasi", 0)
+        kelembaban_udara = sensor_data.get("Kelembaban_Udara_Terkalibrasi", 0)
+        kelembaban_tanah = sensor_data.get("Kelembaban_Tanah_Terkalibrasi", 0)
+        
+        results = evaluate_rules(suhu, kelembaban_udara, kelembaban_tanah)
+        output_durasi = defuzzify(results)
+        
+        # Menyimpan hasil ke Firebase untuk diambil oleh ESP8266
+        result_ref = db.reference('pump_control')
+        result_data = {
+            'durasi': round(output_durasi, 2),
+            'timestamp': int(time.time()),
+            'processed': True
+        }
+        result_ref.set(result_data)
+        
+        return jsonify({
+            'success': True,
+            'input': {
+                'suhu': suhu,
+                'kelembaban_udara': kelembaban_udara,
+                'kelembaban_tanah': kelembaban_tanah
+            },
+            'output': result_data
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-results = evaluate_rules(suhu, kelembaban_udara, kelembaban_tanah)
-output_durasi = defuzzify(results)
+# Route untuk polling data baru
+@app.route('/status', methods=['GET'])
+def status():
+    return jsonify({
+        'status': 'online',
+        'timestamp': int(time.time())
+    })
 
-print(f"Durasi Pompa (detik): {output_durasi:.2f}")
+# Menjalankan aplikasi
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
