@@ -164,7 +164,7 @@ rules = [
     ('Normal', 'Basah', 'Basah', 'Mati'), 
     ('Sejuk', 'Basah', 'Basah', 'Mati'), 
     ('Dingin', 'Basah', 'Basah', 'Mati'), 
-    
+
 ]
 
 # Fungsi Evaluasi Rule
@@ -238,7 +238,7 @@ def calculate_fuzzy():
 def process_sensor_data():
     try:
         # Mengambil data terbaru dari Firebase
-        sensor_ref = db.reference('sensors/latest')
+        sensor_ref = db.reference('MonitoringData')
         sensor_data = sensor_ref.get()
         
         if not sensor_data:
