@@ -285,20 +285,31 @@ def process_sensor_data_automatic():
             output_kategori = get_output_category(output_durasi)
             
             # Menyimpan hasil ke Firebase untuk diambil oleh ESP8266
-            result_data = {
-                'durasi': round(output_durasi, 2),
-                'kategori': output_kategori,
-                'timestamp': current_time,
-                'processed': True
-            }
-            pump_ref.set(result_data)
+            result_data = {}
             
             # Cek apakah kategori output adalah "Mati"
             if output_kategori == "Mati":
                 print(f"Output dalam kategori 'Mati' ({output_durasi} detik), pompa tidak akan dijalankan")
+                # Set durasi ke 0 untuk kategori "Mati" agar ESP tidak menjalankan pompa
+                result_data = {
+                    'durasi': 0,  # Set durasi ke 0
+                    'durasi_asli': round(output_durasi, 2),  # Simpan durasi asli untuk referensi
+                    'kategori': output_kategori,
+                    'timestamp': current_time,
+                    'processed': True,
+                    'pump_should_run': False  # Flag untuk ESP8266
+                }
                 # Update status pompa ke "finished" agar tidak menunggu pompa berjalan
                 db.reference('pump_status').set({'status': 'finished', 'timestamp': current_time})
-            elif output_durasi > 7.5:
+            else:
+                # Untuk kategori selain "Mati", kirim durasi normal
+                result_data = {
+                    'durasi': round(output_durasi, 2),
+                    'kategori': output_kategori,
+                    'timestamp': current_time,
+                    'processed': True,
+                    'pump_should_run': True  # Flag untuk ESP8266
+                }
                 pump_running = True
                 print(f"Pompa akan berjalan selama {output_durasi} detik (kategori: {output_kategori})")
                 
@@ -312,6 +323,9 @@ def process_sensor_data_automatic():
                 timer = threading.Timer(output_durasi + 5, pump_finished)
                 timer.daemon = True
                 timer.start()
+            
+            # Simpan hasil ke Firebase
+            pump_ref.set(result_data)
         
         # Fungsi untuk mendeteksi status pompa
         def pump_status_listener(event):
@@ -363,20 +377,33 @@ def process_sensor_data():
         
         # Menyimpan hasil ke Firebase untuk diambil oleh ESP8266
         result_ref = db.reference('pump_control')
-        result_data = {
-            'durasi': round(output_durasi, 2),
-            'kategori': output_kategori,
-            'timestamp': int(time.time()),
-            'processed': True
-        }
-        result_ref.set(result_data)
         
-        # Jika kategori output adalah "Mati", perbarui status pompa
+        # Cek apakah kategori output adalah "Mati"
         if output_kategori == "Mati":
+            result_data = {
+                'durasi': 0,  # Set durasi ke 0
+                'durasi_asli': round(output_durasi, 2),  # Simpan durasi asli untuk referensi
+                'kategori': output_kategori,
+                'timestamp': int(time.time()),
+                'processed': True,
+                'pump_should_run': False  # Flag untuk ESP8266
+            }
+            # Update status pompa ke finished
             db.reference('pump_status').set({
                 'status': 'finished', 
                 'timestamp': int(time.time())
             })
+        else:
+            result_data = {
+                'durasi': round(output_durasi, 2),
+                'kategori': output_kategori,
+                'timestamp': int(time.time()),
+                'processed': True,
+                'pump_should_run': True  # Flag untuk ESP8266
+            }
+        
+        # Simpan hasil ke Firebase
+        result_ref.set(result_data)
         
         return jsonify({
             'success': True,
