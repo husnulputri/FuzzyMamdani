@@ -165,7 +165,6 @@ rules = [
     ('Normal', 'Basah', 'Basah', 'Mati'), 
     ('Sejuk', 'Basah', 'Basah', 'Mati'), 
     ('Dingin', 'Basah', 'Basah', 'Mati'), 
-
 ]
 
 # Fungsi Evaluasi Rule
@@ -218,6 +217,28 @@ def defuzzify(results):
         return numerator / denominator
 
 
+# Fungsi untuk menentukan kategori output berdasarkan durasi
+def get_output_category(durasi):
+    # Cek rentang nilai untuk setiap kategori
+    if 0 <= durasi <= 7.5:
+        return "Mati"
+    elif durasi <= 15:
+        return "Cepat"
+    elif durasi <= 22.5:
+        return "Sebentar"
+    elif durasi <= 30:
+        return "Agak Sebentar"
+    elif durasi <= 37.5:
+        return "Sedang"
+    elif durasi <= 45:
+        return "Agak Lumayan"
+    elif durasi <= 52.5:
+        return "Lumayan"
+    elif durasi <= 60:
+        return "Lama"
+    else:
+        return "Sangat Lama"
+
 # Variabel untuk melacak status pompa
 pump_running = False
 last_processed_time = 0
@@ -261,18 +282,25 @@ def process_sensor_data_automatic():
             
             results = evaluate_rules(suhu, kelembaban_udara, kelembaban_tanah)
             output_durasi = defuzzify(results)
+            output_kategori = get_output_category(output_durasi)
             
             # Menyimpan hasil ke Firebase untuk diambil oleh ESP8266
             result_data = {
                 'durasi': round(output_durasi, 2),
+                'kategori': output_kategori,
                 'timestamp': current_time,
                 'processed': True
             }
             pump_ref.set(result_data)
             
-            if output_durasi > 0:
+            # Cek apakah kategori output adalah "Mati"
+            if output_kategori == "Mati":
+                print(f"Output dalam kategori 'Mati' ({output_durasi} detik), pompa tidak akan dijalankan")
+                # Update status pompa ke "finished" agar tidak menunggu pompa berjalan
+                db.reference('pump_status').set({'status': 'finished', 'timestamp': current_time})
+            elif output_durasi > 0:
                 pump_running = True
-                print(f"Pompa akan berjalan selama {output_durasi} detik")
+                print(f"Pompa akan berjalan selama {output_durasi} detik (kategori: {output_kategori})")
                 
                 # Set timer untuk menandai selesainya penyiraman
                 def pump_finished():
@@ -331,15 +359,24 @@ def process_sensor_data():
         
         results = evaluate_rules(suhu, kelembaban_udara, kelembaban_tanah)
         output_durasi = defuzzify(results)
+        output_kategori = get_output_category(output_durasi)
         
         # Menyimpan hasil ke Firebase untuk diambil oleh ESP8266
         result_ref = db.reference('pump_control')
         result_data = {
             'durasi': round(output_durasi, 2),
+            'kategori': output_kategori,
             'timestamp': int(time.time()),
             'processed': True
         }
         result_ref.set(result_data)
+        
+        # Jika kategori output adalah "Mati", perbarui status pompa
+        if output_kategori == "Mati":
+            db.reference('pump_status').set({
+                'status': 'finished', 
+                'timestamp': int(time.time())
+            })
         
         return jsonify({
             'success': True,
