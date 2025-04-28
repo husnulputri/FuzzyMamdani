@@ -298,7 +298,7 @@ def process_sensor_data_automatic():
                 print(f"Output dalam kategori 'Mati' ({output_durasi} detik), pompa tidak akan dijalankan")
                 # Update status pompa ke "finished" agar tidak menunggu pompa berjalan
                 db.reference('pump_status').set({'status': 'finished', 'timestamp': current_time})
-            elif output_durasi > 0:
+            elif output_durasi > 7.5:
                 pump_running = True
                 print(f"Pompa akan berjalan selama {output_durasi} detik (kategori: {output_kategori})")
                 
