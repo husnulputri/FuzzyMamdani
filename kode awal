@@ -8,7 +8,9 @@ import threading
 
 app = Flask(__name__)
 
-
+# Initialize Firebase
+# Di Railway, Anda perlu set FIREBASE_CREDENTIALS sebagai environment variable
+# yang berisi konten JSON dari service account key
 if 'FIREBASE_CREDENTIALS' in os.environ:
     cred_dict = eval(os.environ.get('FIREBASE_CREDENTIALS'))
     cred = credentials.Certificate(cred_dict)
@@ -22,127 +24,97 @@ firebase_admin.initialize_app(cred, {
 
 # Fungsi Membership untuk Suhu
 def suhu_dingin(a):
-    if a <= 20:
+    if a <= 15:
         return 1
-    elif 20 < a <= 24:
-        return (24 - a) / (24 - 20)
+    elif 15 < a <= 20:
+        return (20 - a) / (20 - 15)
     else:
         return 0
 
 def suhu_sejuk(a):
-    if a <= 20 or a > 27:
+    if a <= 15 or a > 25:
         return 0
-    elif 20 < a <= 24:
-        return (a - 20) / (24 - 20)
-    elif 23.6 < a <= 27:
-        return (27 - a) / (27 - 24)
-    elif a == 24:
+    elif 15 < a <= 20:
+        return (a - 15) / (20 - 15)
+    elif 20 < a <= 25:
+        return (25 - a) / (25 - 20)
+    elif a == 20:
         return 1
     else:
         return 0
 
 def suhu_normal(a):
-    if a <= 24 or a > 31:
+    if a <= 20 or a > 30:
         return 0
-    elif 24 < a <= 27:
-        return (a - 24) / (27 - 24)
-    elif 27 < a <= 31:
-        return (31 - a) / (31 - 27)
-    elif a == 27:
+    elif 20 < a <= 25:
+        return (a - 20) / (25 - 20)
+    elif 25 < a <= 30:
+        return (30 - a) / (30 - 25)
+    elif a == 25:
         return 1
     else:
         return 0
 
 def suhu_hangat(a):
-    if a <= 27 or a > 36:
+    if a <= 25 or a > 35:
         return 0
-    elif 27 < a <= 31:
-        return (a - 27) / (31 - 27)
-    elif 31 < a <= 36:
-        return (36 - a) / (36 - 31)
-    elif a == 31:
+    elif 25 < a <= 30:
+        return (a - 25) / (30 - 25)
+    elif 30 < a <= 35:
+        return (35 - a) / (35 - 30)
+    elif a == 30:
         return 1
     else:
         return 0
 
 def suhu_panas(a):
-    if a <= 31:
+    if a <= 30:
         return 0
-    elif 31 < a <= 36:
-        return (a - 31) / (36 - 31)
-    else: 
+    elif 30 < a <= 35:
+        return (a - 30) / (35 - 30)
+    else:  # a > 35
         return 1
 
-# Membership untuk Kelembaban Udara 
-def kelembaban_udara_kering(b):
-    if b <= 40:
+# Membership untuk Kelembaban Udara dan Kelembaban Tanah
+def kelembaban_kering(x):
+    if x <= 25:
         return 1
-    elif 40 < b <= 50:
-        return (50 - b) / (50 - 40)
+    elif 25 < x <= 36:
+        return (36 - x) / (36 - 25)
     else:
         return 0
 
-def kelembaban_udara_normal(b):
-    if b <= 40 or b > 80:
+def kelembaban_normal(x):
+    if x <= 25 or x > 75:
         return 0
-    elif 40 < b <= 60:
-        return (b - 40) / (60 - 40)
-    elif 60 < b <= 80:
-        return (80 - b) / (80 - 60)
-    elif b == 60:
-        return 1
-    else:
-        return 0
-
-def kelembaban_udara_basah(b):
-    if b <= 70:
-        return 0
-    elif 70 < b <= 80:
-        return (b - 70) / (80 - 70)
-    else:
-        return 1
-    
-# Membership untuk Kelembaban Tanah
-def kelembaban_tanah_kering(c):
-    if c <= 70:
-        return 1
-    elif 70 < c <= 80:
-        return (80 - c) / (80 - 70)
-    else:
-        return 0
-
-def kelembaban_tanah_normal(c):
-    if c <= 70 or c > 95:
-        return 0
-    elif 70 < c <= 85:
-        return (c - 70) / (85 - 70)
-    elif 85 < c <= 95:
-        return (95 - c) / (95 - 85)
-    elif c == 85:
+    elif 25 < x <= 50:
+        return (x - 25) / (50 - 25)
+    elif 50 < x <= 75:
+        return (75 - x) / (75 - 50)
+    elif x == 50:
         return 1
     else:
         return 0
 
-def kelembaban_tanah_basah(c):
-    if c <= 90:
+def kelembaban_basah(x):
+    if x <= 64:
         return 0
-    elif 90 < c <= 95:
-        return (c - 90) / (95 - 90)
+    elif 64 < x <= 75:
+        return (x - 64) / (75 - 64)
     else:
         return 1
-
 
 # Output mapping (durasi dalam detik)
 output_values = {
-    'Mati': (0, 7500),                  # 0-7.5 detik = 0-7500 milidetik
-    'Cepat': (0, 15000),                # 0-15 detik = 0-15000 milidetik 
-    'Sebentar': (7500, 22500),          # 7.5-22.5 detik = 7500-22500 milidetik
-    'Agak Sebentar': (15000, 30000),    # 15-30 detik = 15000-30000 milidetik
-    'Sedang': (22500, 37500),           # 22.5-37.5 detik = 22500-37500 milidetik
-    'Agak Lumayan': (30000, 45000),     # 30-45 detik = 30000-45000 milidetik
-    'Lumayan': (37500, 52500),          # 37.5-52.5 detik = 37500-52500 milidetik
-    'Lama': (45000, 60000),             # 45-60 detik = 45000-60000 milidetik
-    'Sangat Lama': (52500, 60000),      # 52.5-60 detik = 52500-60000 milidetik
+    'Mati': (0, 7.5),
+    'Cepat': (0, 15),
+    'Sebentar': (7.5, 22.5),
+    'Agak Sebentar': (15, 30),
+    'Sedang': (22.5, 37.5),
+    'Agak Lumayan': (30, 45),
+    'Lumayan': (37.5, 52.5),
+    'Lama': (45, 60),
+    'Sangat Lama': (52.5, 60),
 }
 
 # Fuzzy Rules
@@ -193,6 +165,7 @@ rules = [
     ('Normal', 'Basah', 'Basah', 'Mati'), 
     ('Sejuk', 'Basah', 'Basah', 'Mati'), 
     ('Dingin', 'Basah', 'Basah', 'Mati'), 
+
 ]
 
 # Fungsi Evaluasi Rule
@@ -205,14 +178,14 @@ def evaluate_rules(suhu, kelembaban_udara, kelembaban_tanah):
         'Panas': suhu_panas(suhu)
     }
     fuzzy_kelembaban_udara = {
-        'Kering': kelembaban_udara_kering(kelembaban_udara),
-        'Normal': kelembaban_udara_normal(kelembaban_udara),
-        'Basah': kelembaban_udara_basah(kelembaban_udara)
+        'Kering': kelembaban_kering(kelembaban_udara),
+        'Normal': kelembaban_normal(kelembaban_udara),
+        'Basah': kelembaban_basah(kelembaban_udara)
     }
     fuzzy_kelembaban_tanah = {
-        'Kering': kelembaban_tanah_kering(kelembaban_tanah),
-        'Normal': kelembaban_tanah_normal(kelembaban_tanah),
-        'Basah': kelembaban_tanah_basah(kelembaban_tanah)
+        'Kering': kelembaban_kering(kelembaban_tanah),
+        'Normal': kelembaban_normal(kelembaban_tanah),
+        'Basah': kelembaban_basah(kelembaban_tanah)
     }
 
     results = []
@@ -243,29 +216,6 @@ def defuzzify(results):
         return 0  # Tidak ada aktivasi rule
     else:
         return numerator / denominator
-
-
-# Fungsi untuk menentukan kategori output berdasarkan durasi
-def get_output_category(durasi_ms):
-    # Cek rentang nilai untuk setiap kategori (dalam milidetik)
-    if 0 <= durasi_ms <= 7500:
-        return "Mati"
-    elif durasi_ms <= 15000:
-        return "Cepat"
-    elif durasi_ms <= 22500:
-        return "Sebentar"
-    elif durasi_ms <= 30000:
-        return "Agak Sebentar"
-    elif durasi_ms <= 37500:
-        return "Sedang"
-    elif durasi_ms <= 45000:
-        return "Agak Lumayan"
-    elif durasi_ms <= 52500:
-        return "Lumayan"
-    elif durasi_ms <= 60000:
-        return "Lama"
-    else:
-        return "Sangat Lama"
 
 
 # Variabel untuk melacak status pompa
@@ -311,36 +261,18 @@ def process_sensor_data_automatic():
             
             results = evaluate_rules(suhu, kelembaban_udara, kelembaban_tanah)
             output_durasi = defuzzify(results)
-            output_kategori = get_output_category(output_durasi)
             
             # Menyimpan hasil ke Firebase untuk diambil oleh ESP8266
-            result_data = {}
+            result_data = {
+                'durasi': round(output_durasi, 2),
+                'timestamp': current_time,
+                'processed': True
+            }
+            pump_ref.set(result_data)
             
-            # Cek apakah kategori output adalah "Mati"
-            if output_kategori == "Mati":
-                print(f"Output dalam kategori 'Mati' ({output_durasi} detik), pompa tidak akan dijalankan")
-                # Set durasi ke 0 untuk kategori "Mati" agar ESP tidak menjalankan pompa
-                result_data = {
-                    'durasi': 0,  # Set durasi ke 0
-                    'durasi_asli': round(output_durasi, 2),  # Simpan durasi asli untuk referensi
-                    'kategori': output_kategori,
-                    'timestamp': current_time,
-                    'processed': True,
-                    'pump_should_run': False  # Flag untuk ESP8266
-                }
-                # Update status pompa ke "finished" agar tidak menunggu pompa berjalan
-                db.reference('pump_status').set({'status': 'finished', 'timestamp': current_time})
-            else:
-                # Untuk kategori selain "Mati", kirim durasi normal
-                result_data = {
-                    'durasi': round(output_durasi, 2),
-                    'kategori': output_kategori,
-                    'timestamp': current_time,
-                    'processed': True,
-                    'pump_should_run': True  # Flag untuk ESP8266
-                }
+            if output_durasi > 0:
                 pump_running = True
-                print(f"Pompa akan berjalan selama {output_durasi} detik (kategori: {output_kategori})")
+                print(f"Pompa akan berjalan selama {output_durasi} detik")
                 
                 # Set timer untuk menandai selesainya penyiraman
                 def pump_finished():
@@ -352,9 +284,6 @@ def process_sensor_data_automatic():
                 timer = threading.Timer(output_durasi + 5, pump_finished)
                 timer.daemon = True
                 timer.start()
-            
-            # Simpan hasil ke Firebase
-            pump_ref.set(result_data)
         
         # Fungsi untuk mendeteksi status pompa
         def pump_status_listener(event):
@@ -402,36 +331,14 @@ def process_sensor_data():
         
         results = evaluate_rules(suhu, kelembaban_udara, kelembaban_tanah)
         output_durasi = defuzzify(results)
-        output_kategori = get_output_category(output_durasi)
         
         # Menyimpan hasil ke Firebase untuk diambil oleh ESP8266
         result_ref = db.reference('pump_control')
-        
-        # Cek apakah kategori output adalah "Mati"
-        if output_kategori == "Mati":
-            result_data = {
-                'durasi': 0,  # Set durasi ke 0
-                'durasi_asli': round(output_durasi, 2),  # Simpan durasi asli untuk referensi
-                'kategori': output_kategori,
-                'timestamp': int(time.time()),
-                'processed': True,
-                'pump_should_run': False  # Flag untuk ESP8266
-            }
-            # Update status pompa ke finished
-            db.reference('pump_status').set({
-                'status': 'finished', 
-                'timestamp': int(time.time())
-            })
-        else:
-            result_data = {
-                'durasi': round(output_durasi, 2),
-                'kategori': output_kategori,
-                'timestamp': int(time.time()),
-                'processed': True,
-                'pump_should_run': True  # Flag untuk ESP8266
-            }
-        
-        # Simpan hasil ke Firebase
+        result_data = {
+            'durasi': round(output_durasi, 2),
+            'timestamp': int(time.time()),
+            'processed': True
+        }
         result_ref.set(result_data)
         
         return jsonify({
