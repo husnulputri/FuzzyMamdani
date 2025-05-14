@@ -134,15 +134,15 @@ def kelembaban_tanah_basah(c):
 
 # Output mapping (durasi dalam detik)
 output_values = {
-    'Mati': (0, 7500),                  # 0-7.5 detik = 0-7500 milidetik
-    'Cepat': (0, 15000),                # 0-15 detik = 0-15000 milidetik 
-    'Sebentar': (7500, 22500),          # 7.5-22.5 detik = 7500-22500 milidetik
-    'Agak Sebentar': (15000, 30000),    # 15-30 detik = 15000-30000 milidetik
-    'Sedang': (22500, 37500),           # 22.5-37.5 detik = 22500-37500 milidetik
-    'Agak Lumayan': (30000, 45000),     # 30-45 detik = 30000-45000 milidetik
-    'Lumayan': (37500, 52500),          # 37.5-52.5 detik = 37500-52500 milidetik
-    'Lama': (45000, 60000),             # 45-60 detik = 45000-60000 milidetik
-    'Sangat Lama': (52500, 60000),      # 52.5-60 detik = 52500-60000 milidetik
+    'Mati': (0, 7.5),
+    'Cepat': (0, 15),
+    'Sebentar': (7.5, 22.5),
+    'Agak Sebentar': (15, 30),
+    'Sedang': (22.5, 37.5),
+    'Agak Lumayan': (30, 45),
+    'Lumayan': (37.5, 52.5),
+    'Lama': (45, 60),
+    'Sangat Lama': (52.5, 60),
 }
 
 # Fuzzy Rules
@@ -246,27 +246,26 @@ def defuzzify(results):
 
 
 # Fungsi untuk menentukan kategori output berdasarkan durasi
-def get_output_category(durasi_ms):
-    # Cek rentang nilai untuk setiap kategori (dalam milidetik)
-    if 0 <= durasi_ms <= 7500:
+def get_output_category(durasi):
+    # Cek rentang nilai untuk setiap kategori
+    if 0 <= durasi <= 7.5:
         return "Mati"
-    elif durasi_ms <= 15000:
+    elif durasi <= 15:
         return "Cepat"
-    elif durasi_ms <= 22500:
+    elif durasi <= 22.5:
         return "Sebentar"
-    elif durasi_ms <= 30000:
+    elif durasi <= 30:
         return "Agak Sebentar"
-    elif durasi_ms <= 37500:
+    elif durasi <= 37.5:
         return "Sedang"
-    elif durasi_ms <= 45000:
+    elif durasi <= 45:
         return "Agak Lumayan"
-    elif durasi_ms <= 52500:
+    elif durasi <= 52.5:
         return "Lumayan"
-    elif durasi_ms <= 60000:
+    elif durasi <= 60:
         return "Lama"
     else:
         return "Sangat Lama"
-
 
 # Variabel untuk melacak status pompa
 pump_running = False
