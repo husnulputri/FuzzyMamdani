@@ -34,7 +34,7 @@ def suhu_sejuk(a):
         return 0
     elif 20 < a <= 24:
         return (a - 20) / (24 - 20)
-    elif 23.6 < a <= 27:
+    elif 24 < a <= 27:
         return (27 - a) / (27 - 24)
     elif a == 24:
         return 1
