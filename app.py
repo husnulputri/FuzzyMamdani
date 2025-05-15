@@ -226,7 +226,8 @@ def evaluate_rules(suhu, kelembaban_udara, kelembaban_tanah):
         )
         results.append((degree, output_label))
 
-    return results
+    # Mengembalikan nilai fuzzy sebagai bagian dari hasil
+    return results, fuzzy_suhu, fuzzy_kelembaban_udara, fuzzy_kelembaban_tanah
 
 # Defuzzifikasi (Menggunakan Metode rata-rata terpusat Centroid)
 def defuzzify(results):
@@ -279,6 +280,7 @@ def process_sensor_data_automatic():
         # Mengambil data terbaru dari Firebase
         sensor_ref = db.reference('MonitoringData')
         pump_ref = db.reference('pump_control')
+        fuzzy_values_ref = db.reference('FuzzyValues')  # Referensi baru untuk nilai fuzzy
         
         # Stream listener untuk mendeteksi perubahan data sensor
         def sensor_listener(event):
@@ -308,7 +310,32 @@ def process_sensor_data_automatic():
             kelembaban_udara = sensor_data.get("Kelembaban_Udara_Terkalibrasi", 0)
             kelembaban_tanah = sensor_data.get("Kelembaban_Tanah_Terkalibrasi", 0)
             
-            results = evaluate_rules(suhu, kelembaban_udara, kelembaban_tanah)
+            # Evaluasi fuzzy rules
+            results, fuzzy_suhu, fuzzy_kelembaban_udara, fuzzy_kelembaban_tanah = evaluate_rules(
+                suhu, kelembaban_udara, kelembaban_tanah
+            )
+            
+            # Simpan nilai fuzzy ke Firebase
+            fuzzy_values = {
+                'Suhu': {k: round(v, 4) for k, v in fuzzy_suhu.items()},
+                'KelembapanUdara': {k: round(v, 4) for k, v in fuzzy_kelembaban_udara.items()},
+                'KelembapanTanah': {k: round(v, 4) for k, v in fuzzy_kelembaban_tanah.items()},
+                'timestamp': current_time
+            }
+            fuzzy_values_ref.set(fuzzy_values)
+            
+            # Simpan nilai rule yang diaktifkan (dengan derajat > 0)
+            activated_rules = []
+            for degree, output_label in results:
+                if degree > 0:
+                    activated_rules.append({
+                        'derajat': round(degree, 4),
+                        'output': output_label
+                    })
+            
+            if activated_rules:
+                fuzzy_values_ref.child('AktifasiRule').set(activated_rules)
+            
             output_durasi = defuzzify(results)
             output_kategori = get_output_category(output_durasi)
             
@@ -399,7 +426,35 @@ def process_sensor_data():
         kelembaban_udara = sensor_data.get("Kelembaban_Udara_Terkalibrasi", 0)
         kelembaban_tanah = sensor_data.get("Kelembaban_Tanah_Terkalibrasi", 0)
         
-        results = evaluate_rules(suhu, kelembaban_udara, kelembaban_tanah)
+        # Evaluasi fuzzy rules dengan mendapatkan nilai fuzzy
+        results, fuzzy_suhu, fuzzy_kelembaban_udara, fuzzy_kelembaban_tanah = evaluate_rules(
+            suhu, kelembaban_udara, kelembaban_tanah
+        )
+        
+        # Simpan nilai fuzzy ke Firebase
+        fuzzy_values_ref = db.reference('FuzzyValues')
+        current_time = int(time.time())
+        
+        fuzzy_values = {
+            'Suhu': {k: round(v, 4) for k, v in fuzzy_suhu.items()},
+            'KelembapanUdara': {k: round(v, 4) for k, v in fuzzy_kelembaban_udara.items()},
+            'KelembapanTanah': {k: round(v, 4) for k, v in fuzzy_kelembaban_tanah.items()},
+            'timestamp': current_time
+        }
+        fuzzy_values_ref.set(fuzzy_values)
+        
+        # Simpan nilai rule yang diaktifkan (dengan derajat > 0)
+        activated_rules = []
+        for degree, output_label in results:
+            if degree > 0:
+                activated_rules.append({
+                    'derajat': round(degree, 4),
+                    'output': output_label
+                })
+        
+        if activated_rules:
+            fuzzy_values_ref.child('AktifasiRule').set(activated_rules)
+        
         output_durasi = defuzzify(results)
         output_kategori = get_output_category(output_durasi)
         
@@ -412,20 +467,20 @@ def process_sensor_data():
                 'durasi': 0,  # Set durasi ke 0
                 'durasi_asli': round(output_durasi, 2),  # Simpan durasi asli untuk referensi
                 'kategori': output_kategori,
-                'timestamp': int(time.time()),
+                'timestamp': current_time,
                 'processed': True,
                 'pump_should_run': False  # Flag untuk ESP8266
             }
             # Update status pompa ke finished
             db.reference('pump_status').set({
                 'status': 'finished', 
-                'timestamp': int(time.time())
+                'timestamp': current_time
             })
         else:
             result_data = {
                 'durasi': round(output_durasi, 2),
                 'kategori': output_kategori,
-                'timestamp': int(time.time()),
+                'timestamp': current_time,
                 'processed': True,
                 'pump_should_run': True  # Flag untuk ESP8266
             }
@@ -440,6 +495,7 @@ def process_sensor_data():
                 'kelembaban_udara': kelembaban_udara,
                 'kelembaban_tanah': kelembaban_tanah
             },
+            'fuzzy_values': fuzzy_values,
             'output': result_data
         })
         
