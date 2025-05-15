@@ -317,6 +317,11 @@ def process_sensor_data_automatic():
             
             # Simpan nilai fuzzy ke Firebase
             fuzzy_values = {
+                'InputNilai': {
+                    'Suhu': round(suhu, 2),
+                    'KelembapanUdara': round(kelembaban_udara, 2),
+                    'KelembapanTanah': round(kelembaban_tanah, 2)
+                },
                 'Suhu': {k: round(v, 4) for k, v in fuzzy_suhu.items()},
                 'KelembapanUdara': {k: round(v, 4) for k, v in fuzzy_kelembaban_udara.items()},
                 'KelembapanTanah': {k: round(v, 4) for k, v in fuzzy_kelembaban_tanah.items()},
@@ -436,6 +441,11 @@ def process_sensor_data():
         current_time = int(time.time())
         
         fuzzy_values = {
+            'InputNilai': {
+                'Suhu': round(suhu, 2),
+                'KelembapanUdara': round(kelembaban_udara, 2),
+                'KelembapanTanah': round(kelembaban_tanah, 2)
+            },
             'Suhu': {k: round(v, 4) for k, v in fuzzy_suhu.items()},
             'KelembapanUdara': {k: round(v, 4) for k, v in fuzzy_kelembaban_udara.items()},
             'KelembapanTanah': {k: round(v, 4) for k, v in fuzzy_kelembaban_tanah.items()},
